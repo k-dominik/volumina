@@ -2,6 +2,7 @@
 =============================================
 
 [![Circle CI](https://circleci.com/gh/ilastik/volumina.svg?style=svg)](https://circleci.com/gh/ilastik/volumina)
+[![Build status](https://ci.appveyor.com/api/projects/status/2uswd4qecxrpakgn/branch/master?svg=true)](https://ci.appveyor.com/project/k-dominik/volumina-28bl1/branch/master)
 
 Installing
 ==========
