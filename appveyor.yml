@@ -25,12 +25,12 @@ test_script:
   - cd \
   - cd ilastik\ilastik-meta\volumina\tests
   - set Path=C:\ilastik;C:\ilastik\scripts;%Path%
-  - >
-      nosetests
-      --nologcapture
-      --with-xunit
-      --xunit-file=nosetests.volumina.xml
-      .
+  # - >
+  #     nosetests
+  #     --nologcapture
+  #     --with-xunit
+  #     --xunit-file=nosetests.volumina.xml
+  #     .
 
-# on_finish:
-#  - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
+on_finish:
+ - ps: $blockRdp = $true; iex ((new-object net.webclient).DownloadString('https://raw.githubusercontent.com/appveyor/ci/master/scripts/enable-rdp.ps1'))
