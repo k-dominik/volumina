@@ -31,6 +31,7 @@ except ImportError:
     warnings.warn("Modules vigra and/or lazyflow not found. "
           "Will not import %s" % os.path.basename(__file__)) 
 
+
 if has_dependencies:
     import unittest as ut
     import os
@@ -135,12 +136,17 @@ if has_dependencies:
         def testLazy( self ):
             for i in range(3):
                 self.op.setConstant(i)
-                aimg = self.renderScene(self.scene, "/tmp/a_%03d.png" % i)
+
+                aimg = self.renderScene(self.scene)
+                # comment out for debugging:
+                # aimg = self.renderScene(self.scene, "/tmp/a_%03d.png" % i)
                 assert numpy.all(aimg[:,:,0] == i), "!= %d, [0,0,0]=%d" % (i, aimg[0,0,0])
 
                 self.op.setConstant(42)
                 self.op.setDelay(1)
-                aimg = self.renderScene(self.scene, joinRendering=False, exportFilename="/tmp/x_%03d.png" % i)
+                aimg = self.renderScene(self.scene, joinRendering=False)
+                # comment out for debugging:
+                # aimg = self.renderScene(self.scene, joinRendering=False, exportFilename="/tmp/x_%03d.png" % i)
                 #this should be "i", not 255 (the default background for the imagescene)
                 assert numpy.all(aimg[:,:,0] == i), "!= %d, [0,0,0]=%d" % (i, aimg[0,0,0])
                 
