@@ -527,11 +527,13 @@ class TileProvider( QObject ):
                 QRectF(self.tiling.imageRects[tile_no]),
                 progress)
 
-    def waitForTiles(self, rectF=QRectF()):
+    def waitForTiles(self, rectF=None):
         """
         This function is for testing purposes only.
         Block until all tiles intersecting the given rect are complete.
         """
+        if rectF is None:
+            rectF = QRectF()
         finished = False
         while not finished:
             finished = True
