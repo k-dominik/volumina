@@ -3,6 +3,7 @@ from os.path import split, join
 from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import pyqtSignal, pyqtSlot
 from PyQt5.uic import loadUiType
+from . import shaders
 
 
 class Overview3D(QWidget):
@@ -54,6 +55,16 @@ class Overview3D(QWidget):
 
         self.reinitialized.emit()  # TODO: this should not be necessary: remove
         self._view.slice_changed.connect(self.slice_changed)
+
+        self._ui.combo_shader.setEditable(False)
+        shader_names = shaders.shaders
+        self._ui.combo_shader.addItems(sorted(shader_names))
+        self._ui.combo_shader.setCurrentIndex(self._ui.combo_shader.findText(self._view._shader))
+        self._ui.combo_shader.currentIndexChanged.connect(self._update_shader)
+
+    def _update_shader(self, index):
+        shader_name = self._ui.combo_shader.itemText(index)
+        self._view.set_shader(shader_name)
 
     @staticmethod
     def _adjust_axes(x, y, z):

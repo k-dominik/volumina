@@ -39,6 +39,7 @@ class GLViewReal(GLViewWidget):
 
         self._mouse_pos = None
 
+        self._shader = "toon"
         self._meshes = {}
         # Make sure the layout stays the same no matter if the 3D widget is on/off
         size_policy = self.sizePolicy()
@@ -61,6 +62,7 @@ class GLViewReal(GLViewWidget):
             if name in self._meshes:
                 self.removeItem(self._meshes[name])
             self._meshes[name] = mesh
+            mesh.setShader(self._shader)
             self.addItem(mesh)
 
     def remove_mesh(self, name):
@@ -93,6 +95,11 @@ class GLViewReal(GLViewWidget):
         mesh = self._meshes.pop(name, None)
         if mesh is not None:
             self.removeItem(mesh)
+
+    def set_shader(self, shader):
+        self._shader = shader
+        for mesh in self._meshes.values():
+            mesh.setShader(self._shader)
 
     @property
     def visible_meshes(self):

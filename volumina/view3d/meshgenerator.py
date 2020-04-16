@@ -3,7 +3,6 @@ from os.path import split, join
 from numpy import where
 
 from pyqtgraph.opengl import MeshData, GLMeshItem
-from pyqtgraph.opengl.shaders import ShaderProgram, VertexShader, FragmentShader
 
 from PyQt5.QtCore import QThread, pyqtSignal
 from PyQt5.QtWidgets import QDialog
@@ -19,41 +18,6 @@ except ImportError:
         verts, faces, normals, values = marching_cubes_lewiner(volume, 1)
         faces = correct_mesh_orientation(volume, verts, faces)
         return verts, None, faces
-
-
-ShaderProgram(
-    "toon",
-    [
-        VertexShader(
-            """
-        varying vec3 normal;
-
-        void main() {
-            normal = gl_Normal;
-            gl_Position = gl_ModelViewProjectionMatrix * gl_Vertex;
-
-            gl_FrontColor = gl_Color;
-            gl_BackColor = gl_Color;
-        }
-    """
-        ),
-        FragmentShader(
-            """
-        varying vec3 normal;
-
-        void main() {
-            vec3 light = normalize(vec3(1.0, -1.0, -1.0));
-            float intensity;
-
-            intensity = (dot(light, normalize(normal)) + 1.0) / 2.0;
-
-            //gl_FragColor = max(round(intensity * 3), 0.3) / 3 * gl_Color / 2;
-            gl_FragColor = intensity * gl_Color;
-        }
-    """
-        ),
-    ],
-)
 
 
 def labeling_to_mesh(labeling, labels):
@@ -124,7 +88,7 @@ class MeshGenerator(QThread):
         When finished the signal mesh_generated is emitted again with label 0 and mesh None
         """
         for label, mesh in labeling_to_mesh(self._labeling, self._labels):
-            item = GLMeshItem(meshdata=mesh, smooth=True, shader="toon")
+            item = GLMeshItem(meshdata=mesh, smooth=True)
             self.mesh_generated.emit(self._mapping.get(label, label), item)
         self.mesh_generated.emit(0, None)
 

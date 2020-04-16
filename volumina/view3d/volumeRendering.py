@@ -117,7 +117,6 @@ class RenderingManager(object):
             self._overview_scene.set_busy(False)
         else:
             mesh.setColor(self._cmap[self._mapping[label]] + (1,))
-            mesh.setShader("toon")
             self._overview_scene.add_object(label, mesh)
 
     def setColor(self, label, color):
