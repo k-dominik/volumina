@@ -374,9 +374,7 @@ class DataExportOptionsDlg(QDialog):
 
         self.outputAxisOrderEdit.editingFinished.connect(_handleNewAxisOrder)
         self.outputAxisOrderEdit.textChanged.connect(partial(self._updateAxisOrderColor, True))
-        self.outputAxisOrderEdit.setValidator(
-            DataExportOptionsDlg._AxisOrderValidator(self, self._opDataExport.ConvertedImage)
-        )
+        self.outputAxisOrderEdit.setValidator(DataExportOptionsDlg._AxisOrderValidator(self, self._opDataExport.Input))
         self.outputAxisOrderEdit.installEventFilter(DataExportOptionsDlg._AxisOrderEventFilter(self))
         self.axisOrderCheckbox.toggled.connect(_handleAxisOrderChecked)
 
@@ -410,7 +408,8 @@ class DataExportOptionsDlg(QDialog):
 
         def validate(self, userAxes, pos):
             taggedShape = self._inputSlot.meta.getTaggedShape()
-            inputAxes = list(taggedShape.keys())
+            originalAxes = self._inputSlot.meta.getOriginalAxisKeys()
+            inputAxes = list(originalAxes)
             inputSet = set(inputAxes)
             userSet = set(str(userAxes))
 
@@ -425,7 +424,7 @@ class DataExportOptionsDlg(QDialog):
             # If missing non-singleton axes, maybe intermediate entry
             # (It's okay to omit singleton axes)
             for key in inputSet - userSet:
-                if taggedShape[key] != 1:
+                if taggedShape.get(key, 1) != 1:
                     return (QValidator.Intermediate, userAxes, pos)
 
             return (QValidator.Acceptable, userAxes, pos)
