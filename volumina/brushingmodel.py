@@ -45,7 +45,7 @@ class BrushingModel(QObject):
     defaultDrawnNumber = 1
     defaultColor = Qt.white
     erasingColor = Qt.black
-    erasingNumber = 100
+    erasingNumber = 0
 
     def __init__(self, parent=None):
         QObject.__init__(self, parent=parent)
@@ -164,7 +164,7 @@ class BrushingModel(QObject):
         ndarr //= 4 * 4
 
         downsample_threshold = (7.0 / 16) * 255
-        labels = numpy.where(ndarr >= downsample_threshold, numpy.uint8(self.drawnNumber), numpy.uint8(0))
+        labels = numpy.where(ndarr >= downsample_threshold, numpy.uint32(self.drawnNumber), numpy.uint32(0))
         labels = labels.swapaxes(0, 1)
         assert labels.shape[0] == self.bb.width()
         assert labels.shape[1] == self.bb.height()

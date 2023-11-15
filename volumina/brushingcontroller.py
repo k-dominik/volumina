@@ -30,6 +30,7 @@ from PyQt5.QtGui import QPen, QBrush, QMouseEvent
 from PyQt5.QtWidgets import QApplication, QGraphicsLineItem, QUndoStack, QUndoCommand
 
 from volumina.eventswitch import InterpreterABC
+from volumina.positionModel import PositionModel
 from .navigationController import NavigationInterpreter
 
 
@@ -158,7 +159,7 @@ class BrushingInterpreter(QObject, InterpreterABC):
             if (
                 etype == QEvent.MouseButtonPress
                 and event.button() == Qt.LeftButton
-                and event.modifiers() == Qt.NoModifier
+                and (event.modifiers() == Qt.NoModifier or event.modifiers() == Qt.AltModifier)
                 and self._navIntr.mousePositionValid(watched, event)
             ):
                 ### default mode -> maybe draw mode
@@ -245,8 +246,14 @@ class BrushingInterpreter(QObject, InterpreterABC):
         if QApplication.keyboardModifiers() == Qt.ShiftModifier:
             self._brushingCtrl._brushingModel.setErasing()
             self._temp_erasing = True
+
         imageview.mousePos = imageview.mapScene2Data(imageview.mapToScene(event.pos()))
-        self._brushingCtrl.beginDrawing(imageview, imageview.mousePos)
+        update_color = False
+        if event.modifiers() == Qt.AltModifier:
+            # defo switching
+            update_color = True
+
+        self._brushingCtrl.beginDrawing(imageview, imageview.mousePos, update_color)
 
     def onExit_draw(self, imageview, event):
         self._brushingCtrl.endDrawing(imageview.mousePos)
@@ -297,7 +304,7 @@ class BrushingInterpreter(QObject, InterpreterABC):
 class BrushingController(QObject):
     wroteToSink = pyqtSignal()
 
-    def __init__(self, brushingModel, positionModel, dataSink, *, undoStack):
+    def __init__(self, brushingModel, positionModel: PositionModel, dataSink, *, undoStack):
         QObject.__init__(self, parent=None)
         self._dataSink = dataSink
         self._undoStack = undoStack
@@ -309,9 +316,27 @@ class BrushingController(QObject):
         self._isDrawing = False
         self._tempErase = False
 
-    def beginDrawing(self, imageview, pos):
+    def beginDrawing(self, imageview, pos, update_color=False):
         imageview.mousePos = pos
+        slicingPos = self._positionModel.slicingPos
         self._isDrawing = True
+        if update_color:
+            activeView = self._positionModel.activeView
+            t, c = self._positionModel.time, self._positionModel.channel
+            x = int(pos.x())
+            y = int(pos.y())
+            slicing = [
+                slice(x, x + 1),
+                slice(y, y + 1),
+            ]
+            slicing.insert(activeView, slice(int(slicingPos[activeView]), int(slicingPos[activeView] + 1)))
+            slicing = (slice(t, t + 1),) + tuple(slicing) + (slice(c, c + 1),)
+            new_val = self._dataSink.request(slicing).wait().copy()[0]
+            assert new_val.size == 1
+            new_val = new_val.flat[0]
+            print("changing drawn number to", new_val)
+            if new_val != 0:
+                self._brushingModel.setDrawnNumber(new_val)
         self._brushingModel.beginDrawing(pos, imageview.sliceShape)
 
     def endDrawing(self, pos):
