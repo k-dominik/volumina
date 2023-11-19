@@ -258,7 +258,12 @@ class BrushingInterpreter(QObject, InterpreterABC):
         self._brushingCtrl.beginDrawing(imageview, imageview.mousePos, update_color)
 
     def onExit_draw(self, imageview, event):
+        if event.modifiers() == Qt.ShiftModifier:
+            self._brushingCtrl._overwriting = True
+        else:
+            self._brushingCtrl._overwriting = False
         self._brushingCtrl.endDrawing(imageview.mousePos)
+
         if self._temp_erasing:
             self._brushingCtrl._brushingModel.disableErasing()
             self._temp_erasing = False
@@ -276,7 +281,10 @@ class BrushingInterpreter(QObject, InterpreterABC):
         )
         fill = QColor(self._brushingCtrl._brushingModel.drawColor)
         fill.setAlpha(128)
-        brush = QBrush(fill)
+        if event.modifiers() == Qt.ShiftModifier:
+            brush = QBrush(fill, Qt.Dense1Pattern)
+        else:
+            brush = QBrush(fill, Qt.SolidPattern)
 
         if not self._polyg:
             o = imageview.scene().data2scene.map(QPointF(imageview.oldX, imageview.oldY))
@@ -293,6 +301,8 @@ class BrushingInterpreter(QObject, InterpreterABC):
             _poly.lineTo(n)
 
         self._polyg.setPath(_poly)
+        if self._close_poly:
+            self._polyg.setBrush(brush)
 
         # Draw temporary line for the brush stroke so the user gets feedback before the data is really updated.
 
@@ -302,7 +312,6 @@ class BrushingInterpreter(QObject, InterpreterABC):
         # This is called after the brush stroke is stored to the data.
         # Our temporary line object is no longer needed because the data provides the true pixel labels that were stored.
         if self._polyg:
-            print("removing")
             self._polyg.hide()
             self._polyg = None
 
@@ -385,6 +394,8 @@ class BrushingController(QObject):
             new_labels = labels.reshape(tuple(newshape))
             # Assuming ownership of the data, in case of array sink will be overwritten
             old_data = self._dataSink.request(slicing).wait().copy()
+            if self._overwriting:
+                new_labels = numpy.where(old_data != 0, old_data, new_labels)
 
             cmd = DrawLabelCommand(sink=self._dataSink, slicing=slicing, old_data=old_data, labels=new_labels)
 
