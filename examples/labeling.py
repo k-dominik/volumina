@@ -1,11 +1,21 @@
 import sys
 from pathlib import Path
-
+from functools import partial
 import numpy
 from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QColor, QPalette
-from PyQt5.QtWidgets import QApplication, QDialog, QHBoxLayout, QLineEdit, QPushButton, QVBoxLayout, QWidget
+from PyQt5.QtWidgets import (
+    QApplication,
+    QDialog,
+    QHBoxLayout,
+    QLineEdit,
+    QPushButton,
+    QVBoxLayout,
+    QWidget,
+    QButtonGroup,
+)
 
+import volumina._testing
 from volumina.api import Viewer
 from volumina.colortables import create_random_16bit
 from volumina.layer import ColortableLayer, GrayscaleLayer
@@ -19,6 +29,7 @@ class ColorIndicator(QDialog):
     drawNumberChanged = pyqtSignal(int)
     drawColorChanged = pyqtSignal("quint64")
     size_changed = pyqtSignal(int)
+    interactionmode_changed = pyqtSignal(str)
 
     def __init__(self, colors, max_label, parent=None):
         super().__init__(parent)
@@ -56,6 +67,19 @@ class ColorIndicator(QDialog):
         hbox_size.addWidget(self.edit_size)
         hbox_size.addWidget(self.increment_brush_size_btn)
         self.layout.addLayout(hbox_size)
+
+        hbox_btn = QHBoxLayout()
+        self.g = QButtonGroup(exclusive=True)
+        btn_brush = QPushButton("b", checkable=True)
+        btn_poly = QPushButton("p", checkable=True)
+        btn_brush.setChecked(True)
+        self.g.addButton(btn_brush)
+        self.g.addButton(btn_poly)
+        btn_brush.pressed.connect(partial(self.interactionmode_changed.emit, "brushing"))
+        btn_poly.pressed.connect(partial(self.interactionmode_changed.emit, "polybrushing"))
+        hbox_btn.addWidget(btn_brush)
+        hbox_btn.addWidget(btn_poly)
+        self.layout.addLayout(hbox_btn)
 
         self.setLayout(self.layout)
         self.update_color_edit()
@@ -112,11 +136,10 @@ class ColorIndicator(QDialog):
 # data = Path("/Users/kutra/scratch") / "raw.npy"
 # seg = Path("/Users/kutra/scratch") / "mc-seg.npy"
 
-data = Path("/home/kutra/scratch") / "cremi-raw-xyzc.npy"
+data_arr = volumina._testing.cells_image()
 
 # data_arr = numpy.load(data)[numpy.newaxis, :, :, numpy.newaxis]
 # label_arr = numpy.load(seg)[numpy.newaxis, :, :, numpy.newaxis]
-data_arr = numpy.load(data)[numpy.newaxis, :, :, :, :]
 label_arr = numpy.zeros_like(data_arr, dtype="uint32")
 
 ##-----
@@ -151,6 +174,11 @@ c.drawColorChanged.connect(v.editor.brushingModel.setBrushColor)
 c.size_changed.connect(v.editor.brushingModel.setBrushSize)
 v.editor.brushingModel.drawnNumberChanged.connect(lambda x: c.edit_color.setText(str(x)))
 
+c.drawNumberChanged.connect(v.editor.polyBrushingModel.setDrawnNumber)
+c.drawColorChanged.connect(v.editor.polyBrushingModel.setBrushColor)
+c.size_changed.connect(v.editor.polyBrushingModel.setBrushSize)
+c.interactionmode_changed.connect(v.editor.setInteractionMode)
+v.editor.polyBrushingModel.drawnNumberChanged.connect(lambda x: c.edit_color.setText(str(x)))
 
 c.show()
 

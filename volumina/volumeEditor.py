@@ -165,7 +165,8 @@ class VolumeEditor(QObject):
         self._undoStack = QUndoStack()
         self.layerStack = layerStackModel
         self.posModel = PositionModel(self)
-        self.brushingModel = BrushingModel()
+        self.brushingModel = BrushingModel(close_poly=False)
+        self.polyBrushingModel = BrushingModel(close_poly=True)
         self.cropModel = CropExtentsModel(self)
 
         self.imageScenes = [
@@ -212,9 +213,16 @@ class VolumeEditor(QObject):
             self.brushingModel, self.posModel, labelsink, undoStack=self._undoStack
         )
         self.brushingInterpreter = BrushingInterpreter(self.navCtrl, self.brushingController)
+        self.polyBrushingController = BrushingController(
+            self.polyBrushingModel, self.posModel, labelsink, undoStack=self._undoStack
+        )
+        self.polyBrushingInterpreter = BrushingInterpreter(self.navCtrl, self.polyBrushingController)
 
         for v in self.imageViews:
             self.brushingController._brushingModel.brushSizeChanged.connect(v._sliceIntersectionMarker._set_diameter)
+            self.polyBrushingController._brushingModel.brushSizeChanged.connect(
+                v._sliceIntersectionMarker._set_diameter
+            )
 
         # thresholding control
         self.thresInterpreter = ThresholdingInterpreter(self.navCtrl, self.layerStack, self.posModel)
@@ -247,6 +255,7 @@ class VolumeEditor(QObject):
         modes = {
             "navigation": self.navInterpret,
             "brushing": self.brushingInterpreter,
+            "polybrushing": self.polyBrushingInterpreter,
             "thresholding": self.thresInterpreter,
         }
         self.eventSwitch.interpreter = modes[name]
@@ -272,6 +281,7 @@ class VolumeEditor(QObject):
 
     def setLabelSink(self, labelsink):
         self.brushingController.setDataSink(labelsink)
+        self.polyBrushingController.setDataSink(labelsink)
 
     ##
     ## private

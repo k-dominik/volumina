@@ -26,7 +26,7 @@ from functools import partial
 
 import sip
 from PyQt5.QtCore import pyqtSignal, QObject, QEvent, QPointF, Qt, QTimer
-from PyQt5.QtGui import QPen, QBrush, QMouseEvent, QPolygonF, QColor
+from PyQt5.QtGui import QPen, QBrush, QMouseEvent, QPolygonF, QColor, QPainterPath
 from PyQt5.QtWidgets import QApplication, QGraphicsLineItem, QUndoStack, QUndoCommand
 
 from volumina.eventswitch import InterpreterABC
@@ -105,13 +105,13 @@ class BrushingInterpreter(QObject, InterpreterABC):
         self._navCtrl = navigationController
         self._navIntr = NavigationInterpreter(navigationController)
         self._brushingCtrl = brushingController
+        self._close_poly = brushingController._brushingModel._close_poly
+        self._insert_index = 2 if self._close_poly else 1
         self._current_state = self.FINAL
         self._temp_erasing = False  # indicates, if user pressed shift
         # for temporary erasing (in
         # contrast to selecting the eraser brush)
 
-        self._lineItems = []  # list of line items that have been
-        self._poly = None
         self._polyg = None
         # added to the qgraphicsscene for drawing indication
 
@@ -278,18 +278,19 @@ class BrushingInterpreter(QObject, InterpreterABC):
         fill.setAlpha(128)
         brush = QBrush(fill)
 
-        if not self._poly:
-            self._poly = QPolygonF()
-
+        if not self._polyg:
+            _poly = QPolygonF()
             o = imageview.scene().data2scene.map(QPointF(imageview.oldX, imageview.oldY))
-            self._poly.append(o)
-            self._poly.append(o)
+            _poly.append(o)
+            if self._close_poly:
+                self._polyg = imageview.scene().addPolygon(_poly, pen, brush)
+            else:
+                self._polyg = imageview.scene().addPolygon(_poly, pen)
 
-        if self._polyg:
-            imageview.scene().removeItem(self._polyg)
-        self._poly.insert(self._poly.size() - 2, n)
+        _poly = self._polyg.polygon()
+        _poly.append(n)
 
-        self._polyg = imageview.scene().addPolygon(self._poly, pen, brush)
+        self._polyg.setPolygon(_poly)
 
         # Draw temporary line for the brush stroke so the user gets feedback before the data is really updated.
 
@@ -298,9 +299,9 @@ class BrushingInterpreter(QObject, InterpreterABC):
     def clearLines(self):
         # This is called after the brush stroke is stored to the data.
         # Our temporary line object is no longer needed because the data provides the true pixel labels that were stored.
-        self._poly = None
-        self._polyg.hide()
-        self._polyg = None
+        if self.polyg:
+            self.scene().removeItem(self.polyg)
+            self._polyg = None
 
     def updateCursorPosition(self, *args, **kwargs):
         self._navIntr.updateCursorPosition(*args, **kwargs)

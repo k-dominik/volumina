@@ -22,10 +22,10 @@
 #!/usr/bin/env python
 from __future__ import division
 from PyQt5.QtCore import pyqtSignal, QObject, Qt, QSize, QPointF, QRectF, QRect, QPoint, QSizeF
-from PyQt5.QtWidgets import QGraphicsScene, QGraphicsLineItem
+from PyQt5.QtWidgets import QGraphicsScene
 from PyQt5.QtGui import QPen, QColor, QImage, QPainter, QBrush, QPolygonF
 
-import numpy, math
+import numpy
 import qimage2ndarray
 
 # *******************************************************************************
@@ -47,8 +47,9 @@ class BrushingModel(QObject):
     erasingColor = Qt.black
     erasingNumber = 0
 
-    def __init__(self, parent=None):
-        QObject.__init__(self, parent=parent)
+    def __init__(self, *, close_poly=False, parent=None):
+        super().__init__(parent=parent)
+        self._close_poly = close_poly
         self.sliceRect = None
         self.bb = QRect()  # bounding box enclosing the drawing
         self.brushSize: int = self.defaultBrushSize
@@ -62,6 +63,7 @@ class BrushingModel(QObject):
         self._hasMoved = False
 
         self.drawOnto = None
+        self._points = []
 
         # an empty scene, where we add all drawn line segments
         # a QGraphicsLineItem, and which we can use to then
@@ -121,6 +123,7 @@ class BrushingModel(QObject):
         """
         self.sliceRect = sliceRect
         self.scene.clear()
+        self._points = []
         self.bb = QRect()
         self.pos = QPointF(pos.x(), pos.y())
         self._hasMoved = False
@@ -133,26 +136,22 @@ class BrushingModel(QObject):
             assert self.pos == pos
             self.moveTo(QPointF(pos.x() + 0.0001, pos.y() + 0.0001))  # move a little
 
-        # close the shape
-        # get start of the first line item
-        print("should connect")
-        line0 = self.scene.items()[-1].line()
-        start_x = line0.x1()
-        start_y = line0.y1()
-
         # quick hack: convert to polygon, then paint it with the same code as below - should be easy
         # convert scene items to polygon:
-        points = []
-        for line in self.scene.items(order=Qt.DescendingOrder):
-            points.append(line.line().p2())
+        points = self._points
+        points.append(pos)
 
-        points.append(points[0])
-        self.scene.clear()
-        self.scene.addPolygon(
-            QPolygonF(points),
-            QPen(QBrush(Qt.white, Qt.SolidPattern), self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin),
-            QBrush(Qt.white, Qt.SolidPattern),
-        )
+        if self._close_poly:
+            self.scene.addPolygon(
+                QPolygonF(points),
+                QPen(QBrush(Qt.white, Qt.SolidPattern), self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin),
+                QBrush(Qt.white, Qt.SolidPattern),
+            )
+        else:
+            self.scene.addPolygon(
+                QPolygonF(points),
+                QPen(QBrush(Qt.white, Qt.SolidPattern), self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin),
+            )
 
         # Qt seems to use strange rules for determining which pixels to set when rendering a brush stroke to a QImage.
         # We seem to get better results if we do the following:
@@ -199,6 +198,8 @@ class BrushingModel(QObject):
         if not has_moved and self.brushSize <= 1 and numpy.count_nonzero(labels) == 0:
             labels[labels.shape[0] // 2, labels.shape[1] // 2] = self.drawnNumber
 
+        # self.scene.clear()
+        # self.points = []
         self.brushStrokeAvailable.emit(QPointF(self.bb.x(), self.bb.y()), labels)
 
     def dumpDraw(self, pos):
@@ -211,9 +212,7 @@ class BrushingModel(QObject):
         oldX, oldY = self.pos.x(), self.pos.y()
         x, y = pos.x(), pos.y()
 
-        line = QGraphicsLineItem(oldX, oldY, x, y)
-        line.setPen(QPen(QBrush(Qt.white), self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
-        self.scene.addItem(line)
+        self._points.append(pos)
         self._hasMoved = True
 
         # update bounding Box

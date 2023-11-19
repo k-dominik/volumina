@@ -19,3 +19,15 @@
 # This information is also available on the ilastik web site at:
 # 		   http://ilastik.org/license/
 ###############################################################################
+from pathlib import Path
+
+
+def cells_image():
+    """
+    load 2d cells apoptotic and return in `txyzc` axisorder
+    """
+    import numpy
+
+    return numpy.load(Path(__file__).parent / "2d_cells_apoptotic_1channel.npy")[
+        numpy.newaxis, numpy.newaxis, ..., numpy.newaxis
+    ]

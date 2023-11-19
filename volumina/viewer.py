@@ -42,14 +42,13 @@ import random
 
 
 class ClickableSegmentationLayer(QObject):
-
     # whether label (int) is shown (true) or hidden (false)
     clickedValue = pyqtSignal(int, bool, QColor)
 
     def __init__(self, seg, viewer, name=None, direct=None, parent=None, colortable=None, reuseColors=True):
-        """ seg:         segmentation image/volume (5D)
-            reuseColors: if True, colors are assigned based on the number of currently visible objects,
-                         if False, a segment with 'label' is assigned colortable[label] as color
+        """seg:         segmentation image/volume (5D)
+        reuseColors: if True, colors are assigned based on the number of currently visible objects,
+                     if False, a segment with 'label' is assigned colortable[label] as color
         """
         super(ClickableSegmentationLayer, self).__init__(parent)
 
@@ -90,7 +89,7 @@ class ClickableSegmentationLayer(QObject):
         self.relabelingSource.clearRelabeling()
 
     def labelColor(self, label):
-        """ return the current color for object 'label' """
+        """return the current color for object 'label'"""
         color = self.layer.colorTable[label]
         color = QColor.fromRgba(color)
         return color
@@ -210,7 +209,7 @@ class Viewer(QMainWindow):
     def dataShape(self, s):
         if s is None:
             return
-        assert len(s) == 5
+        assert len(s) == 5, f"Expected 5-D shape in `txyzc` order, got {s}"
 
         self._dataShape = s
         if not self._viewerInitialized:
