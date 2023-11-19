@@ -26,7 +26,7 @@ from functools import partial
 
 import sip
 from PyQt5.QtCore import pyqtSignal, QObject, QEvent, QPointF, Qt, QTimer
-from PyQt5.QtGui import QPen, QBrush, QMouseEvent, QPolygonF, QColor, QPainterPath
+from PyQt5.QtGui import QPen, QBrush, QMouseEvent, QColor, QPainterPath
 from PyQt5.QtWidgets import QApplication, QGraphicsLineItem, QUndoStack, QUndoCommand
 
 from volumina.eventswitch import InterpreterABC
@@ -279,18 +279,20 @@ class BrushingInterpreter(QObject, InterpreterABC):
         brush = QBrush(fill)
 
         if not self._polyg:
-            _poly = QPolygonF()
             o = imageview.scene().data2scene.map(QPointF(imageview.oldX, imageview.oldY))
-            _poly.append(o)
+            _poly = QPainterPath()
+            _poly.moveTo(o.x(), o.y())
+            _poly.lineTo(n)
+
             if self._close_poly:
-                self._polyg = imageview.scene().addPolygon(_poly, pen, brush)
+                self._polyg = imageview.scene().addPath(_poly, pen, brush)
             else:
-                self._polyg = imageview.scene().addPolygon(_poly, pen)
+                self._polyg = imageview.scene().addPath(_poly, pen)
+        else:
+            _poly = self._polyg.path()
+            _poly.lineTo(n)
 
-        _poly = self._polyg.polygon()
-        _poly.append(n)
-
-        self._polyg.setPolygon(_poly)
+        self._polyg.setPath(_poly)
 
         # Draw temporary line for the brush stroke so the user gets feedback before the data is really updated.
 
@@ -299,8 +301,9 @@ class BrushingInterpreter(QObject, InterpreterABC):
     def clearLines(self):
         # This is called after the brush stroke is stored to the data.
         # Our temporary line object is no longer needed because the data provides the true pixel labels that were stored.
-        if self.polyg:
-            self.scene().removeItem(self.polyg)
+        if self._polyg:
+            print("removing")
+            self._polyg.hide()
             self._polyg = None
 
     def updateCursorPosition(self, *args, **kwargs):

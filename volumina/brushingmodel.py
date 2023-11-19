@@ -23,7 +23,7 @@
 from __future__ import division
 from PyQt5.QtCore import pyqtSignal, QObject, Qt, QSize, QPointF, QRectF, QRect, QPoint, QSizeF
 from PyQt5.QtWidgets import QGraphicsScene
-from PyQt5.QtGui import QPen, QColor, QImage, QPainter, QBrush, QPolygonF
+from PyQt5.QtGui import QPen, QColor, QImage, QPainter, QBrush, QPainterPath
 
 import numpy
 import qimage2ndarray
@@ -140,16 +140,20 @@ class BrushingModel(QObject):
         # convert scene items to polygon:
         points = self._points
         points.append(pos)
+        path = QPainterPath()
+        path.moveTo(points[0])
+        for p in points[1:]:
+            path.lineTo(p)
 
         if self._close_poly:
-            self.scene.addPolygon(
-                QPolygonF(points),
+            self.scene.addPath(
+                path,
                 QPen(QBrush(Qt.white, Qt.SolidPattern), self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin),
                 QBrush(Qt.white, Qt.SolidPattern),
             )
         else:
-            self.scene.addPolygon(
-                QPolygonF(points),
+            self.scene.addPath(
+                path,
                 QPen(QBrush(Qt.white, Qt.SolidPattern), self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin),
             )
 
