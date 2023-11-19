@@ -102,7 +102,9 @@ class ImageView2D(QGraphicsView):
         # can be overriden in either `.voluminarc`, or via env variable
         # `VOLUMINA_ENABLE_FALLBACK_VIEWPORTS=1`
         if not volumina.config.CONFIG.enable_fallback_viewports:
-            self.setViewport(QOpenGLWidget())
+            from PyQt5.QtOpenGL import QGLWidget
+
+            self.setViewport(QGLWidget())
 
         self.setScene(imagescene2d)
         self.mousePos = QPointF(0, 0)

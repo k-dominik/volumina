@@ -23,7 +23,7 @@
 from __future__ import division
 from PyQt5.QtCore import pyqtSignal, QObject, Qt, QSize, QPointF, QRectF, QRect, QPoint, QSizeF
 from PyQt5.QtWidgets import QGraphicsScene, QGraphicsLineItem
-from PyQt5.QtGui import QPen, QColor, QImage, QPainter, QBrush
+from PyQt5.QtGui import QPen, QColor, QImage, QPainter, QBrush, QPolygonF
 
 import numpy, math
 import qimage2ndarray
@@ -132,6 +132,27 @@ class BrushingModel(QObject):
         else:
             assert self.pos == pos
             self.moveTo(QPointF(pos.x() + 0.0001, pos.y() + 0.0001))  # move a little
+
+        # close the shape
+        # get start of the first line item
+        print("should connect")
+        line0 = self.scene.items()[-1].line()
+        start_x = line0.x1()
+        start_y = line0.y1()
+
+        # quick hack: convert to polygon, then paint it with the same code as below - should be easy
+        # convert scene items to polygon:
+        points = []
+        for line in self.scene.items(order=Qt.DescendingOrder):
+            points.append(line.line().p2())
+
+        points.append(points[0])
+        self.scene.clear()
+        self.scene.addPolygon(
+            QPolygonF(points),
+            QPen(QBrush(Qt.white, Qt.SolidPattern), self.brushSize, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin),
+            QBrush(Qt.white, Qt.SolidPattern),
+        )
 
         # Qt seems to use strange rules for determining which pixels to set when rendering a brush stroke to a QImage.
         # We seem to get better results if we do the following:

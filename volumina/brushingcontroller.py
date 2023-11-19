@@ -26,7 +26,7 @@ from functools import partial
 
 import sip
 from PyQt5.QtCore import pyqtSignal, QObject, QEvent, QPointF, Qt, QTimer
-from PyQt5.QtGui import QPen, QBrush, QMouseEvent
+from PyQt5.QtGui import QPen, QBrush, QMouseEvent, QPolygonF, QColor
 from PyQt5.QtWidgets import QApplication, QGraphicsLineItem, QUndoStack, QUndoCommand
 
 from volumina.eventswitch import InterpreterABC
@@ -111,6 +111,8 @@ class BrushingInterpreter(QObject, InterpreterABC):
         # contrast to selecting the eraser brush)
 
         self._lineItems = []  # list of line items that have been
+        self._poly = None
+        self._polyg = None
         # added to the qgraphicsscene for drawing indication
 
         self._lastEvent = None
@@ -263,11 +265,8 @@ class BrushingInterpreter(QObject, InterpreterABC):
 
     def onMouseMove_draw(self, imageview, event):
         self._navIntr.onMouseMove_default(imageview, event)
-
-        o = imageview.scene().data2scene.map(QPointF(imageview.oldX, imageview.oldY))
         n = imageview.scene().data2scene.map(QPointF(imageview.x, imageview.y))
 
-        # Draw temporary line for the brush stroke so the user gets feedback before the data is really updated.
         pen = QPen(
             QBrush(self._brushingCtrl._brushingModel.drawColor),
             self._brushingCtrl._brushingModel.brushSize,
@@ -275,22 +274,33 @@ class BrushingInterpreter(QObject, InterpreterABC):
             Qt.RoundCap,
             Qt.RoundJoin,
         )
-        line = QGraphicsLineItem(o.x(), o.y(), n.x(), n.y())
-        line.setPen(pen)
+        fill = QColor(self._brushingCtrl._brushingModel.drawColor)
+        fill.setAlpha(128)
+        brush = QBrush(fill)
 
-        imageview.scene().addItem(line)
-        line.setParentItem(imageview.scene().dataRectItem)
+        if not self._poly:
+            self._poly = QPolygonF()
 
-        self._lineItems.append(line)
+            o = imageview.scene().data2scene.map(QPointF(imageview.oldX, imageview.oldY))
+            self._poly.append(o)
+            self._poly.append(o)
+
+        if self._polyg:
+            imageview.scene().removeItem(self._polyg)
+        self._poly.insert(self._poly.size() - 2, n)
+
+        self._polyg = imageview.scene().addPolygon(self._poly, pen, brush)
+
+        # Draw temporary line for the brush stroke so the user gets feedback before the data is really updated.
+
         self._brushingCtrl._brushingModel.moveTo(imageview.mousePos)
 
     def clearLines(self):
         # This is called after the brush stroke is stored to the data.
         # Our temporary line object is no longer needed because the data provides the true pixel labels that were stored.
-        lines = self._lineItems
-        self._lineItems = []
-        for l in lines:
-            l.hide()
+        self._poly = None
+        self._polyg.hide()
+        self._polyg = None
 
     def updateCursorPosition(self, *args, **kwargs):
         self._navIntr.updateCursorPosition(*args, **kwargs)
@@ -321,6 +331,7 @@ class BrushingController(QObject):
         slicingPos = self._positionModel.slicingPos
         self._isDrawing = True
         if update_color:
+            # get label color at position
             activeView = self._positionModel.activeView
             t, c = self._positionModel.time, self._positionModel.channel
             x = int(pos.x())
@@ -334,7 +345,6 @@ class BrushingController(QObject):
             new_val = self._dataSink.request(slicing).wait().copy()[0]
             assert new_val.size == 1
             new_val = new_val.flat[0]
-            print("changing drawn number to", new_val)
             if new_val != 0:
                 self._brushingModel.setDrawnNumber(new_val)
         self._brushingModel.beginDrawing(pos, imageview.sliceShape)

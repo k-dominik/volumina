@@ -109,11 +109,15 @@ class ColorIndicator(QDialog):
         self.size_changed.emit(self.size)
 
 
-data = Path("/Users/kutra/scratch") / "raw.npy"
-seg = Path("/Users/kutra/scratch") / "mc-seg.npy"
+# data = Path("/Users/kutra/scratch") / "raw.npy"
+# seg = Path("/Users/kutra/scratch") / "mc-seg.npy"
 
-data_arr = numpy.load(data)[numpy.newaxis, :, :, numpy.newaxis]
-label_arr = numpy.load(seg)[numpy.newaxis, :, :, numpy.newaxis]
+data = Path("/home/kutra/scratch") / "cremi-raw-xyzc.npy"
+
+# data_arr = numpy.load(data)[numpy.newaxis, :, :, numpy.newaxis]
+# label_arr = numpy.load(seg)[numpy.newaxis, :, :, numpy.newaxis]
+data_arr = numpy.load(data)[numpy.newaxis, :, :, :, :]
+label_arr = numpy.zeros_like(data_arr, dtype="uint32")
 
 ##-----
 app = QApplication(sys.argv)
