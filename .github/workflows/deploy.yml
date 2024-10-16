@@ -17,8 +17,7 @@ jobs:
           auto-update-conda: true
           auto-activate-base: true
           activate-environment: ""
-          miniforge-variant: Mambaforge
-          use-mamba: true
+          miniforge-version: latest
       - name: linux conda build and upload
         shell: bash -l {0}
         env:

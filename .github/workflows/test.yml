@@ -23,7 +23,6 @@ jobs:
           auto-update-conda: true
           environment-file: .github/workflows/etc/ilastik-env.yaml
           miniforge-version: latest
-          use-mamba: true
       - name: linux test
         if: matrix.os == 'ubuntu-latest'
         shell: bash -l {0}
@@ -69,7 +68,6 @@ jobs:
           environment-file: .github/workflows/etc/build-env.yaml
           auto-update-conda: true
           miniforge-version: latest
-          use-mamba: true
       - name: linux conda build test
         if: matrix.os == 'ubuntu-latest'
         shell: bash -l {0}
