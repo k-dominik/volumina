@@ -57,3 +57,12 @@ class PrioritizedThreadPoolExecutor(ThreadPoolExecutor):
             self._work_queue.put(w)
             self._adjust_thread_count()
             return fut
+
+    def clear(self):
+        q = self._work_queue
+        while not q.empty():
+            try:
+                q.get(False)
+            except:
+                continue
+            q.task_done()
