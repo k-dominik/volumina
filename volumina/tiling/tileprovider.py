@@ -57,8 +57,10 @@ from lazyflow.request import Request
 
 
 class PrioTask:
-    def __init__(self, func: Request, prio, viewport_ref, stack_id):
+    def __init__(self, func: Request, task, prio, viewport_ref, stack_id, tile_no):
         self._func: Request = func
+        self._task = task
+        self._tile_no = tile_no
         self._prio = prio
         self._vp = viewport_ref
         self._stack_id = stack_id
@@ -83,11 +85,11 @@ class Supervisor:
         self._active = 0
         self._lock = RLock()
 
-    def submit(self, task: Callable, priority: Tuple[int, int], viewport_ref, stack_id):
+    def submit(self, task: Callable, priority: Tuple[int, int], viewport_ref, stack_id, tile_no):
         # print("Submitting")
         root_priority = [1] + list(priority)
         req = Request(task, root_priority)
-        self._queue.put(PrioTask(req, priority, viewport_ref, stack_id))
+        self._queue.put(PrioTask(req, task, priority, viewport_ref, stack_id, tile_no))
         self.run()
 
     def run(self):
@@ -121,7 +123,7 @@ class Supervisor:
                 except Empty:
                     break
 
-    def clear_vp_res(self, viewport, stack_id):
+    def clear_vp_res(self, viewport, stack_id, keep_tiles):
         tmp_queue = []
         with self._lock:
             while True:
@@ -131,8 +133,13 @@ class Supervisor:
                     break
 
                 if task._vp == viewport and task._stack_id != stack_id:
-                    self._cleared_tasks += 1
                     task.cancel()
+                    self._cleared_tasks += 1
+                    continue
+
+                if task._vp == viewport and task._stack_id == stack_id and task._tile_no not in keep_tiles:
+                    task.cancel()
+                    self._cleared_tasks += 1
                     continue
 
                 tmp_queue.append(task)
@@ -143,18 +150,18 @@ class Supervisor:
         print(f"current cleared = {self._cleared_tasks}")
 
 
-def clear_threadpool_vp(vp, stack_id):
-    get_render_pool().clear_vp_res(vp, stack_id)
+def clear_threadpool_vp(vp, stack_id, keep_tiles):
+    get_render_pool().clear_vp_res(vp, stack_id, keep_tiles)
 
 
-def submit_to_threadpool(fn, priority, viewport, stack_id):
+def submit_to_threadpool(fn, priority, viewport, stack_id, tile_no):
     # if USE_LAZYFLOW_THREADPOOL:
     # Tiling requests are less prioritized than most requests.
     # root_priority = [1] + list(priority)
     # req = Request(fn, root_priority)
     # req.submit()
     # else:
-    get_render_pool().submit(fn, priority, viewport, stack_id)
+    get_render_pool().submit(fn, priority, viewport, stack_id, tile_no)
 
 
 renderer_pool = None
@@ -246,7 +253,7 @@ class TileProvider(QObject):
     def set_cache_size(self, new_size):
         self._cache.set_maxstacks(new_size)
 
-    def getTiles(self, rectF):
+    def getTiles(self, rectF, vp_rectF):
         """Get tiles in rect and request a refresh.
 
         Returns tiles intersecting with rectF immediately and requests
@@ -256,9 +263,17 @@ class TileProvider(QObject):
 
         """
         # get_render_pool().clear()
-        self.requestRefresh(rectF)
         tile_nos = self.tiling.intersected(rectF)
         stack_id = self._current_stack_id
+        keep_tiles = self.tiling.intersected(vp_rectF)
+        clear_threadpool_vp(self, stack_id, keep_tiles)
+        self.requestRefresh(rectF)
+
+        print("---------------------")
+        print(tile_nos)
+        print(keep_tiles)
+        print("---------------------")
+
         for tile_no in tile_nos:
             with self._cache:
                 qimg, progress = self._cache.tile(stack_id, tile_no)
@@ -286,8 +301,6 @@ class TileProvider(QObject):
         """
         stack_id = stack_id or self._current_stack_id
         tile_nos = self.tiling.intersected(rectF)
-
-        clear_threadpool_vp(self, stack_id)
 
         for tile_no in tile_nos:
             self._refreshTile(stack_id, tile_no, prefetch, layer_indexes)
@@ -347,9 +360,10 @@ class TileProvider(QObject):
         transform *= self.tiling.data2scene
 
         try:
-            with self._cache:
-                if not self._cache.tileDirty(stack_id, tile_no):
-                    return
+            # with self._cache:
+            #     if not self._cache.tileDirty(stack_id, tile_no):
+            #         print("shorting out")
+            #         return
 
             if not prefetch:
                 with self._cache:
@@ -406,7 +420,7 @@ class TileProvider(QObject):
                     else:
                         priority = (prefetch, 0, -timestamp)
                     # priority = (prefetch, -timestamp)
-                    submit_to_threadpool(fetch_fn, priority, self, stack_id)
+                    submit_to_threadpool(fetch_fn, priority, self, stack_id, tile_no)
 
             if need_reblend:
                 # We synchronously fetched at least one direct layer.

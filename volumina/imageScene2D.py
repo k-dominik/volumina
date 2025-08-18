@@ -477,12 +477,13 @@ class ImageScene2D(QGraphicsScene):
         #        As a workaround, we manually check the amount of the scene that needs to be drawn,
         #        instead of relying on the above sceneRectF parameter to be correct.
         if self.views():
-            sceneRectF = self.views()[0].viewportRect().intersected(sceneRectF)
+            vp_rectF = self.views()[0].viewportRect()
+            sceneRectF = vp_rectF.intersected(sceneRectF)
 
         if not sceneRectF.isValid():
             return
 
-        tiles = self._tileProvider.getTiles(sceneRectF)
+        tiles = self._tileProvider.getTiles(sceneRectF, vp_rectF)
         allComplete = True
         for tile in tiles:
             # We always draw the tile, even though it might not be up-to-date
