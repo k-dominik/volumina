@@ -57,9 +57,11 @@ from lazyflow.request import Request
 
 
 class PrioTask:
-    def __init__(self, func: Request, prio):
+    def __init__(self, func: Request, prio, viewport_ref, stack_id):
         self._func: Request = func
         self._prio = prio
+        self._vp = viewport_ref
+        self._stack_id = stack_id
 
     def run(self):
         self._func.submit()
@@ -67,21 +69,25 @@ class PrioTask:
     def __lt__(self, other: "PrioTask"):
         return self._prio < other._prio
 
+    def cancel(self):
+        self._func.cancel()
+
 
 class Supervisor:
     def __init__(self, n_concurrent_tasks=8):
         assert n_concurrent_tasks > 0
+        self._cleared_tasks = 0
         self._n_concurrent_tasks: Final[int] = n_concurrent_tasks
         self._queue = PriorityQueue()
         self._latest = dict()
         self._active = 0
         self._lock = RLock()
 
-    def submit(self, task: Callable, priority: Tuple[int, int]):
+    def submit(self, task: Callable, priority: Tuple[int, int], viewport_ref, stack_id):
         # print("Submitting")
         root_priority = [1] + list(priority)
         req = Request(task, root_priority)
-        self._queue.put(PrioTask(req, priority))
+        self._queue.put(PrioTask(req, priority, viewport_ref, stack_id))
         self.run()
 
     def run(self):
@@ -115,15 +121,40 @@ class Supervisor:
                 except Empty:
                     break
 
+    def clear_vp_res(self, viewport, stack_id):
+        tmp_queue = []
+        with self._lock:
+            while True:
+                try:
+                    task = self._queue.get_nowait()
+                except Empty:
+                    break
 
-def submit_to_threadpool(fn, priority):
+                if task._vp == viewport and task._stack_id != stack_id:
+                    self._cleared_tasks += 1
+                    task.cancel()
+                    continue
+
+                tmp_queue.append(task)
+
+            for task in tmp_queue:
+                self._queue.put(task)
+
+        print(f"current cleared = {self._cleared_tasks}")
+
+
+def clear_threadpool_vp(vp, stack_id):
+    get_render_pool().clear_vp_res(vp, stack_id)
+
+
+def submit_to_threadpool(fn, priority, viewport, stack_id):
     # if USE_LAZYFLOW_THREADPOOL:
     # Tiling requests are less prioritized than most requests.
     # root_priority = [1] + list(priority)
     # req = Request(fn, root_priority)
     # req.submit()
     # else:
-    get_render_pool().submit(fn, priority)
+    get_render_pool().submit(fn, priority, viewport, stack_id)
 
 
 renderer_pool = None
@@ -255,6 +286,9 @@ class TileProvider(QObject):
         """
         stack_id = stack_id or self._current_stack_id
         tile_nos = self.tiling.intersected(rectF)
+
+        clear_threadpool_vp(self, stack_id)
+
         for tile_no in tile_nos:
             self._refreshTile(stack_id, tile_no, prefetch, layer_indexes)
 
@@ -367,12 +401,12 @@ class TileProvider(QObject):
                     # Tasks with 'smaller' priority values are processed first.
                     # We want non-prefetch tasks to take priority (False < True)
                     # and then more recent tasks to take priority (more recent -> process first)
-                    # if ims.name.startswith("Raw"):
-                    #     priority = (prefetch, -1, -timestamp)
-                    # else:
-                    # priority = (prefetch, 0, -timestamp)
-                    priority = (prefetch, -timestamp)
-                    submit_to_threadpool(fetch_fn, priority)
+                    if ims.name.startswith("Raw"):
+                        priority = (prefetch, -1, -timestamp)
+                    else:
+                        priority = (prefetch, 0, -timestamp)
+                    # priority = (prefetch, -timestamp)
+                    submit_to_threadpool(fetch_fn, priority, self, stack_id)
 
             if need_reblend:
                 # We synchronously fetched at least one direct layer.
