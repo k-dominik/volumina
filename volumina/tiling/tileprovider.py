@@ -147,7 +147,7 @@ class Supervisor:
             for task in tmp_queue:
                 self._queue.put(task)
 
-        print(f"current cleared = {self._cleared_tasks}")
+        # print(f"current cleared = {self._cleared_tasks}")
 
 
 def clear_threadpool_vp(vp, stack_id, keep_tiles):
@@ -268,11 +268,6 @@ class TileProvider(QObject):
         keep_tiles = self.tiling.intersected(vp_rectF)
         clear_threadpool_vp(self, stack_id, keep_tiles)
         self.requestRefresh(rectF)
-
-        print("---------------------")
-        print(tile_nos)
-        print(keep_tiles)
-        print("---------------------")
 
         for tile_no in tile_nos:
             with self._cache:
