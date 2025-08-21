@@ -174,7 +174,7 @@ def get_render_pool():
     """
     global renderer_pool
     if renderer_pool is None:
-        renderer_pool = Supervisor(10)
+        renderer_pool = Supervisor(9)
 
     return renderer_pool
 
