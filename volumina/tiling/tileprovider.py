@@ -21,20 +21,24 @@
 ###############################################################################
 import collections
 import logging
-from queue import PriorityQueue, Queue, SimpleQueue, Empty
-from threading import Condition, Lock, RLock, Semaphore
 import time
 from contextlib import contextmanager
 from functools import partial
 
 from typing import Callable, Final, Tuple
+from queue import Empty, PriorityQueue, Queue, SimpleQueue
+from threading import Condition, Lock, RLock, Semaphore
+import numpy
+
+
 from qtpy.QtCore import QObject, QRect, QRectF, Signal
 from qtpy.QtGui import QImage, QPainter, QTransform
 from qtpy.QtWidgets import QGraphicsItem
 
 from volumina.pixelpipeline.imagepump import StackedImageSources
 from volumina.pixelpipeline.interface import IndeterminateRequestError
-from volumina.utility import PrioritizedThreadPoolExecutor, PrioritizedTask
+from volumina.pixelpipeline.slicesources import StackId, SyncedSliceSources
+from volumina.utility import PrioritizedTask, PrioritizedThreadPoolExecutor
 
 from .cache import TilesCache
 from .tiling import Tiling
@@ -57,7 +61,15 @@ from lazyflow.request import Request
 
 
 class PrioTask:
-    def __init__(self, func: Request, task, prio, viewport_ref, stack_id, tile_no):
+    def __init__(
+        self,
+        func: Request,
+        task: Callable,
+        prio: Tuple[bool, int, float],
+        viewport_ref: "TileProvider",
+        stack_id: StackId,
+        tile_no: int,
+    ):
         self._func: Request = func
         self._task = task
         self._tile_no = tile_no
@@ -65,7 +77,7 @@ class PrioTask:
         self._vp = viewport_ref
         self._stack_id = stack_id
 
-    def run(self):
+    def run(self) -> None:
         self._func.submit()
 
     def __lt__(self, other: "PrioTask"):
@@ -75,8 +87,8 @@ class PrioTask:
         self._func.cancel()
 
 
-class Supervisor:
-    def __init__(self, n_concurrent_tasks=8):
+class VoluminaRequestBuffer:
+    def __init__(self, n_concurrent_tasks: int = 8):
         assert n_concurrent_tasks > 0
         self._cleared_tasks = 0
         self._n_concurrent_tasks: Final[int] = n_concurrent_tasks
@@ -85,8 +97,7 @@ class Supervisor:
         self._active = 0
         self._lock = RLock()
 
-    def submit(self, task: Callable, priority: Tuple[int, int], viewport_ref, stack_id, tile_no):
-        # print("Submitting")
+    def submit(self, task: Callable, priority, viewport_ref: "TileProvider", stack_id: StackId, tile_no: int):
         root_priority = [1] + list(priority)
         req = Request(task, root_priority)
         self._queue.put(PrioTask(req, task, priority, viewport_ref, stack_id, tile_no))
@@ -123,7 +134,7 @@ class Supervisor:
                 except Empty:
                     break
 
-    def clear_vp_res(self, viewport, stack_id, keep_tiles):
+    def clear_vp_res(self, viewport: "TileProvider", stack_id: StackId, keep_tiles: List[int]):
         tmp_queue = []
         with self._lock:
             while True:
@@ -150,11 +161,17 @@ class Supervisor:
         # print(f"current cleared = {self._cleared_tasks}")
 
 
-def clear_threadpool_vp(vp, stack_id, keep_tiles):
+def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: List[int]):
     get_render_pool().clear_vp_res(vp, stack_id, keep_tiles)
 
 
-def submit_to_threadpool(fn, priority, viewport, stack_id, tile_no):
+def submit_to_threadpool(
+    fn: partial,
+    priority: Union[Tuple[bool, float], Tuple[bool, int, float]],
+    viewport: "TileProvider",
+    stack_id: StackId,
+    tile_no: int,
+):
     # if USE_LAZYFLOW_THREADPOOL:
     # Tiling requests are less prioritized than most requests.
     # root_priority = [1] + list(priority)
@@ -174,7 +191,7 @@ def get_render_pool():
     """
     global renderer_pool
     if renderer_pool is None:
-        renderer_pool = Supervisor(9)
+        renderer_pool = VoluminaRequestBuffer(9)
 
     return renderer_pool
 
