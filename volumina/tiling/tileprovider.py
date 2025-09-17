@@ -292,7 +292,7 @@ class TileProvider(QObject):
                 qgraphicsitems = self._cache.graphicsitem_layers(stack_id, tile_no)
             yield TileProvider.Tile(tile_no, qimg, qgraphicsitems, QRectF(self.tiling.imageRects[tile_no]), progress)
 
-    def waitForTiles(self, rectF=QRectF()):
+    def waitForTiles(self, rectF=QRectF(), sceneRectF=QRectF()):
         """
         This function is for testing purposes only.
         Block until all tiles intersecting the given rect are complete.
@@ -300,7 +300,7 @@ class TileProvider(QObject):
         finished = False
         while not finished:
             finished = True
-            tiles = self.getTiles(rectF)
+            tiles = self.getTiles(rectF, sceneRectF)
             for tile in tiles:
                 finished &= tile.progress >= 1.0
 

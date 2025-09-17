@@ -592,7 +592,7 @@ class ImageScene2D(QGraphicsScene):
                     sceneRectF = QRectF()  # invalid QRectF means 'get all tiles'
                 else:
                     sceneRectF = rect
-            self._tileProvider.waitForTiles(sceneRectF)
+            self._tileProvider.waitForTiles(sceneRectF, sceneRectF)
         else:
             self._allTilesCompleteEvent.wait()
 
