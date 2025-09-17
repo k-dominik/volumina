@@ -25,7 +25,7 @@ import time
 from contextlib import contextmanager
 from functools import partial
 
-from typing import Callable, Final, Tuple
+from typing import Callable, Final, Tuple, Union
 from queue import Empty, PriorityQueue, Queue, SimpleQueue
 from threading import Condition, Lock, RLock, Semaphore
 import numpy
@@ -134,7 +134,7 @@ class VoluminaRequestBuffer:
                 except Empty:
                     break
 
-    def clear_vp_res(self, viewport: "TileProvider", stack_id: StackId, keep_tiles: List[int]):
+    def clear_vp_res(self, viewport: "TileProvider", stack_id: StackId, keep_tiles: list[int]):
         tmp_queue = []
         with self._lock:
             while True:
@@ -161,7 +161,7 @@ class VoluminaRequestBuffer:
         # print(f"current cleared = {self._cleared_tasks}")
 
 
-def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: List[int]):
+def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: list[int]):
     get_render_pool().clear_vp_res(vp, stack_id, keep_tiles)
 
 
