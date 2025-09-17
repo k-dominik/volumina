@@ -25,11 +25,9 @@ import time
 from contextlib import contextmanager
 from functools import partial
 
-from typing import Callable, Final, Tuple, Union
-from queue import Empty, PriorityQueue, Queue, SimpleQueue
-from threading import Condition, Lock, RLock, Semaphore
-import numpy
-
+from typing import Callable, Final, Union
+from queue import Empty, PriorityQueue
+from threading import RLock
 
 from qtpy.QtCore import QObject, QRect, QRectF, Signal
 from qtpy.QtGui import QImage, QPainter, QTransform
@@ -45,32 +43,27 @@ from .tiling import Tiling
 
 logger = logging.getLogger(__name__)
 
-
 # If lazyflow is installed, use that threadpool.
 try:
     from lazyflow.request import Request
 
     USE_LAZYFLOW_THREADPOOL = True
 
-
 except ImportError:
-    SE_LAZYFLOW_THREADPOOL = False
-
-
-from lazyflow.request import Request
+    USE_LAZYFLOW_THREADPOOL = False
 
 
 class PrioTask:
     def __init__(
         self,
-        func: Request,
-        task: Callable,
-        prio: Tuple[bool, int, float],
+        func: "Request",
+        task: Callable[[], None],
+        prio: tuple[bool, int, float],
         viewport_ref: "TileProvider",
         stack_id: StackId,
         tile_no: int,
     ):
-        self._func: Request = func
+        self._func: "Request" = func
         self._task = task
         self._tile_no = tile_no
         self._prio = prio
@@ -97,7 +90,7 @@ class VoluminaRequestBuffer:
         self._active = 0
         self._lock = RLock()
 
-    def submit(self, task: Callable, priority, viewport_ref: "TileProvider", stack_id: StackId, tile_no: int):
+    def submit(self, task: Callable[[], None], priority, viewport_ref: "TileProvider", stack_id: StackId, tile_no: int):
         root_priority = [1] + list(priority)
         req = Request(task, root_priority)
         self._queue.put(PrioTask(req, task, priority, viewport_ref, stack_id, tile_no))
@@ -116,12 +109,12 @@ class VoluminaRequestBuffer:
                     req.run()
                     self._active += 1
 
-    def incr(self, *args):
+    def incr(self, *_args):
         with self._lock:
             self._active += 1
         self.run()
 
-    def decr(self, *args):
+    def decr(self, *_args):
         with self._lock:
             self._active -= 1
         self.run()
@@ -158,8 +151,6 @@ class VoluminaRequestBuffer:
             for task in tmp_queue:
                 self._queue.put(task)
 
-        # print(f"current cleared = {self._cleared_tasks}")
-
 
 def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: list[int]):
     get_render_pool().clear_vp_res(vp, stack_id, keep_tiles)
@@ -167,7 +158,7 @@ def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: list[
 
 def submit_to_threadpool(
     fn: partial,
-    priority: Union[Tuple[bool, float], Tuple[bool, int, float]],
+    priority: Union[tuple[bool, float], tuple[bool, int, float]],
     viewport: "TileProvider",
     stack_id: StackId,
     tile_no: int,
@@ -191,7 +182,7 @@ def get_render_pool():
     """
     global renderer_pool
     if renderer_pool is None:
-        renderer_pool = VoluminaRequestBuffer(9)
+        renderer_pool = VoluminaRequestBuffer(10)
 
     return renderer_pool
 
