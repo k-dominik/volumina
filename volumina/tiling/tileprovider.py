@@ -25,18 +25,15 @@ import time
 from contextlib import contextmanager
 from functools import partial
 
-from typing import Callable, Final, Union
-from queue import Empty, PriorityQueue
-from threading import RLock
-
+from typing import Callable, Union
 from qtpy.QtCore import QObject, QRect, QRectF, Signal
 from qtpy.QtGui import QImage, QPainter, QTransform
 from qtpy.QtWidgets import QGraphicsItem
 
 from volumina.pixelpipeline.imagepump import StackedImageSources
 from volumina.pixelpipeline.interface import IndeterminateRequestError
-from volumina.pixelpipeline.slicesources import StackId, SyncedSliceSources
-from volumina.utility import PrioritizedTask, PrioritizedThreadPoolExecutor
+from volumina.pixelpipeline.slicesources import StackId
+from volumina.utility import PrioritizedThreadPoolExecutor
 
 from .cache import TilesCache
 from .tiling import Tiling
@@ -53,138 +50,45 @@ except ImportError:
     USE_LAZYFLOW_THREADPOOL = False
 
 
-class PrioTask:
-    def __init__(
-        self,
-        func: "Request",
-        task: Callable[[], None],
-        prio: tuple[bool, int, float],
-        viewport_ref: "TileProvider",
+renderer_pool = None
+
+if USE_LAZYFLOW_THREADPOOL:
+    from volumina.utility.lazyflowRequestBuffer import LazyflowRequestBuffer
+
+    renderer_pool = LazyflowRequestBuffer(10)
+
+    def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: list[int]):
+        renderer_pool.clear_vp_res(vp, stack_id, keep_tiles)
+
+    def submit_to_threadpool(
+        fn: Callable[[], None],
+        priority: Union[tuple[bool, float], tuple[bool, int, float]],
+        viewport: "TileProvider",
         stack_id: StackId,
         tile_no: int,
     ):
-        self._func: "Request" = func
-        self._task = task
-        self._tile_no = tile_no
-        self._prio = prio
-        self._vp = viewport_ref
-        self._stack_id = stack_id
-
-    def run(self) -> None:
-        self._func.submit()
-
-    def __lt__(self, other: "PrioTask"):
-        return self._prio < other._prio
-
-    def cancel(self):
-        self._func.cancel()
-
-
-class VoluminaRequestBuffer:
-    def __init__(self, n_concurrent_tasks: int = 8):
-        assert n_concurrent_tasks > 0
-        self._cleared_tasks = 0
-        self._n_concurrent_tasks: Final[int] = n_concurrent_tasks
-        self._queue = PriorityQueue()
-        self._latest = dict()
-        self._active = 0
-        self._lock = RLock()
-
-    def submit(self, task: Callable[[], None], priority, viewport_ref: "TileProvider", stack_id: StackId, tile_no: int):
+        # Tiling requests are less prioritized than most requests.
         root_priority = [1] + list(priority)
-        req = Request(task, root_priority)
-        self._queue.put(PrioTask(req, task, priority, viewport_ref, stack_id, tile_no))
-        self.run()
+        req = Request(fn, root_priority)
+        # somehow this for the request thing
+        assert isinstance(renderer_pool, LazyflowRequestBuffer)
+        renderer_pool.submit(fn, priority, viewport, stack_id, tile_no)
 
-    def run(self):
-        with self._lock:
-            while self._active < self._n_concurrent_tasks:
-                try:
-                    req = self._queue.get_nowait()
-                except Empty:
-                    return
+else:
+    renderer_pool = PrioritizedThreadPoolExecutor(6)
 
-                if req:
-                    req._func._sig_execution_complete.subscribe(self.decr)
-                    req.run()
-                    self._active += 1
+    def clear_threadpool_vp(*args, **kwargs):
+        pass
 
-    def incr(self, *_args):
-        with self._lock:
-            self._active += 1
-        self.run()
-
-    def decr(self, *_args):
-        with self._lock:
-            self._active -= 1
-        self.run()
-
-    def clear(self):
-        with self._lock:
-            while True:
-                try:
-                    _ = self._queue.get_nowait()
-                except Empty:
-                    break
-
-    def clear_vp_res(self, viewport: "TileProvider", stack_id: StackId, keep_tiles: list[int]):
-        tmp_queue = []
-        with self._lock:
-            while True:
-                try:
-                    task = self._queue.get_nowait()
-                except Empty:
-                    break
-
-                if task._vp == viewport and task._stack_id != stack_id:
-                    task.cancel()
-                    self._cleared_tasks += 1
-                    continue
-
-                if task._vp == viewport and task._stack_id == stack_id and task._tile_no not in keep_tiles:
-                    task.cancel()
-                    self._cleared_tasks += 1
-                    continue
-
-                tmp_queue.append(task)
-
-            for task in tmp_queue:
-                self._queue.put(task)
-
-
-def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: list[int]):
-    get_render_pool().clear_vp_res(vp, stack_id, keep_tiles)
-
-
-def submit_to_threadpool(
-    fn: partial,
-    priority: Union[tuple[bool, float], tuple[bool, int, float]],
-    viewport: "TileProvider",
-    stack_id: StackId,
-    tile_no: int,
-):
-    # if USE_LAZYFLOW_THREADPOOL:
-    # Tiling requests are less prioritized than most requests.
-    # root_priority = [1] + list(priority)
-    # req = Request(fn, root_priority)
-    # req.submit()
-    # else:
-    get_render_pool().submit(fn, priority, viewport, stack_id, tile_no)
-
-
-renderer_pool = None
-
-
-def get_render_pool():
-    """
-    Return the global thread pool for requesting layer data from ImageSource objects.
-    (Create it first if necessary.)
-    """
-    global renderer_pool
-    if renderer_pool is None:
-        renderer_pool = VoluminaRequestBuffer(10)
-
-    return renderer_pool
+    def submit_to_threadpool(
+        fn: Callable[[], None],
+        priority: Union[tuple[bool, float], tuple[bool, int, float]],
+        _viewport: "TileProvider",
+        _stack_id: StackId,
+        _tile_no: int,
+    ):
+        assert isinstance(renderer_pool, PrioritizedThreadPoolExecutor)
+        renderer_pool.submit(fn, priority)
 
 
 @contextmanager
