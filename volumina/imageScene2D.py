@@ -79,8 +79,6 @@ class DirtyIndicator(QGraphicsItem):
 
         intersected = self._tiling.intersected(option.exposedRect)
 
-        # print "pies are painting at ", option.exposedRect
-
         progress = 0.0
         for i in intersected:
             progress += self._indicate[i]
@@ -103,8 +101,6 @@ class DirtyIndicator(QGraphicsItem):
             painter.drawPie(rectangle, startAngle, spanAngle)
 
         painter.restore()
-
-        # print "progress of %d tiles " % len(intersected), progress/float(len(intersected))
 
     def setTileProgress(self, tileId, progress):
         self._indicate[tileId] = progress
@@ -486,15 +482,13 @@ class ImageScene2D(QGraphicsScene):
 
         tiles = self._tileProvider.getTiles(sceneRectF, vp_rectF)
         allComplete = True
-        print(f"0 - {tiles=}")
         for tile in tiles:
-            print(f"1 - {tile} {tile.progress}")
+            # print(f"1 - {tile} {tile.progress}")
             # We always draw the tile, even though it might not be up-to-date
             # In ilastik's live mode, the user sees the old result while adding
             # new brush strokes on top
             # See also ilastik issue #132 and tests/lazy_test.py
             if tile.qimg is not None:
-                print(f"2 - drawing")
                 painter.drawImage(tile.rectF, tile.qimg)
 
             # The tile also contains a list of any QGraphicsItems that were produced by the layers.
@@ -597,9 +591,7 @@ class ImageScene2D(QGraphicsScene):
                 else:
                     sceneRectF = rect
             self._tileProvider.waitForTiles(sceneRectF, sceneRectF)
-            print(f"Out via waitForTiles")
         else:
-            print(f"Out via event")
             self._allTilesCompleteEvent.wait()
 
     def _bowWave(self, n):

@@ -21,6 +21,7 @@
 ###############################################################################
 import collections
 import logging
+from threading import RLock
 import time
 from contextlib import contextmanager
 from functools import partial
@@ -55,14 +56,14 @@ renderer_pool = None
 if USE_LAZYFLOW_THREADPOOL:
     from volumina.utility.lazyflowRequestBuffer import LazyflowRequestBuffer
 
-    renderer_pool = LazyflowRequestBuffer(10)
+    renderer_pool = LazyflowRequestBuffer(9)
 
     def clear_threadpool_vp(vp: "TileProvider", stack_id: StackId, keep_tiles: list[int]):
         renderer_pool.clear_vp_res(vp, stack_id, keep_tiles)
 
     def submit_to_threadpool(
         fn: Callable[[], None],
-        priority: Union[tuple[bool, float], tuple[bool, int, float]],
+        priority: tuple[bool, float],
         viewport: "TileProvider",
         stack_id: StackId,
         tile_no: int,
@@ -82,7 +83,7 @@ else:
 
     def submit_to_threadpool(
         fn: Callable[[], None],
-        priority: Union[tuple[bool, float], tuple[bool, int, float]],
+        priority: tuple[bool, float],
         _viewport: "TileProvider",
         _stack_id: StackId,
         _tile_no: int,
@@ -103,6 +104,19 @@ def TileTimer():
 
 class TileTime(object):
     seconds = 0.0
+
+
+class TrueInc:
+    _count = 0
+    _lock = RLock()
+
+    def inc(self):
+        with self._lock:
+            self._count += 1
+            return self._count
+
+
+_Counter = TrueInc()
 
 
 class TileProvider(QObject):
@@ -196,7 +210,6 @@ class TileProvider(QObject):
             finished = True
             tiles = self.getTiles(rectF, sceneRectF)
             for tile in tiles:
-                print(f"{tile.progress=}")
                 finished &= tile.progress >= 1.0
 
     def requestRefresh(self, rectF, stack_id=None, prefetch=False, layer_indexes=None):
@@ -267,10 +280,9 @@ class TileProvider(QObject):
         transform *= self.tiling.data2scene
 
         try:
-            # with self._cache:
-            #     if not self._cache.tileDirty(stack_id, tile_no):
-            #         print("shorting out")
-            #         return
+            with self._cache:
+                if not self._cache.tileDirty(stack_id, tile_no):
+                    return
 
             if not prefetch:
                 with self._cache:
@@ -285,7 +297,7 @@ class TileProvider(QObject):
                     )
             # refresh dirty layer tiles
             need_reblend = False
-            for ims in reversed(layers):
+            for ims in layers:
                 with self._cache:
                     layer_dirty = self._cache.layerTileDirty(stack_id, ims, tile_no)
 
@@ -307,7 +319,7 @@ class TileProvider(QObject):
                     logger.debug("Failed to create layer tile request", exc_info=True)
                     continue
 
-                timestamp = time.time()
+                timestamp = _Counter.inc()
                 fetch_fn = partial(
                     self._fetch_layer_tile, timestamp, ims, transform, tile_no, stack_id, ims_req, self._cache
                 )
@@ -322,11 +334,11 @@ class TileProvider(QObject):
                     # Tasks with 'smaller' priority values are processed first.
                     # We want non-prefetch tasks to take priority (False < True)
                     # and then more recent tasks to take priority (more recent -> process first)
-                    if ims.name.startswith("Raw"):
-                        priority = (prefetch, -1, -timestamp)
-                    else:
-                        priority = (prefetch, 0, -timestamp)
-                    # priority = (prefetch, -timestamp)
+                    # if ims.name.startswith("Raw"):
+                    #     priority = (prefetch, -1, -timestamp)
+                    # else:
+                    #     priority = (prefetch, 0, -timestamp)
+                    priority = (prefetch, -timestamp)
                     submit_to_threadpool(fetch_fn, priority, self, stack_id, tile_no)
 
             if need_reblend:
@@ -339,6 +351,10 @@ class TileProvider(QObject):
                     )
         except KeyError:
             pass
+
+    def setTileDirty(self, stack_id, tile_no):
+        with self._cache:
+            self._cache.setTileDirty(stack_id, tile_no, True)
 
     def _blendTile(self, stack_id, tile_nr):
         """

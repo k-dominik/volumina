@@ -342,7 +342,7 @@ class VolumeEditorWidget(QWidget):
         else:
             # 2D data
             key = "tileWidth"
-            default = 512
+            default = 1024
         return key, default
 
     def _getTileWidth(self) -> int:
