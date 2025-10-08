@@ -465,7 +465,7 @@ class ImageScene2D(QGraphicsScene):
         if self._showTileProgress:
             self._dirtyIndicator.setVisible(settled)
 
-    def drawBackground(self, painter, sceneRectF):
+    def drawBackground(self, painter: QPainter, sceneRectF: QRectF):
         if self._tileProvider is None:
             return
 
@@ -476,6 +476,7 @@ class ImageScene2D(QGraphicsScene):
         #        it needs to draw immediately after the ImageView's scrollbar is panned.
         #        As a workaround, we manually check the amount of the scene that needs to be drawn,
         #        instead of relying on the above sceneRectF parameter to be correct.
+        vp_rectF: QRectF = sceneRectF
         if self.views():
             vp_rectF = self.views()[0].viewportRect()
             sceneRectF = vp_rectF.intersected(sceneRectF)
@@ -485,12 +486,15 @@ class ImageScene2D(QGraphicsScene):
 
         tiles = self._tileProvider.getTiles(sceneRectF, vp_rectF)
         allComplete = True
+        print(f"0 - {tiles=}")
         for tile in tiles:
+            print(f"1 - {tile} {tile.progress}")
             # We always draw the tile, even though it might not be up-to-date
             # In ilastik's live mode, the user sees the old result while adding
             # new brush strokes on top
             # See also ilastik issue #132 and tests/lazy_test.py
             if tile.qimg is not None:
+                print(f"2 - drawing")
                 painter.drawImage(tile.rectF, tile.qimg)
 
             # The tile also contains a list of any QGraphicsItems that were produced by the layers.
@@ -593,7 +597,9 @@ class ImageScene2D(QGraphicsScene):
                 else:
                     sceneRectF = rect
             self._tileProvider.waitForTiles(sceneRectF, sceneRectF)
+            print(f"Out via waitForTiles")
         else:
+            print(f"Out via event")
             self._allTilesCompleteEvent.wait()
 
     def _bowWave(self, n):

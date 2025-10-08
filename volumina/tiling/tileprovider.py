@@ -165,7 +165,7 @@ class TileProvider(QObject):
     def set_cache_size(self, new_size):
         self._cache.set_maxstacks(new_size)
 
-    def getTiles(self, rectF, vp_rectF):
+    def getTiles(self, rectF: QRectF, vp_rectF: QRectF):
         """Get tiles in rect and request a refresh.
 
         Returns tiles intersecting with rectF immediately and requests
@@ -174,7 +174,6 @@ class TileProvider(QObject):
         until the rendering is fully complete, call join().
 
         """
-        # get_render_pool().clear()
         tile_nos = self.tiling.intersected(rectF)
         stack_id = self._current_stack_id
         keep_tiles = self.tiling.intersected(vp_rectF)
@@ -197,6 +196,7 @@ class TileProvider(QObject):
             finished = True
             tiles = self.getTiles(rectF, sceneRectF)
             for tile in tiles:
+                print(f"{tile.progress=}")
                 finished &= tile.progress >= 1.0
 
     def requestRefresh(self, rectF, stack_id=None, prefetch=False, layer_indexes=None):

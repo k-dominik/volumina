@@ -126,3 +126,4 @@ class LazyflowRequestBuffer:
 
             for task in tmp_queue:
                 self._queue.put(task)
+        print(self._cleared_tasks)

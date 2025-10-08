@@ -112,7 +112,7 @@ if has_dependencies:
             self.scene.stackedImageSources = self.sims
             self.scene.dataShape = (30, 30)
 
-        def renderScene(self, s, exportFilename=None, joinRendering=True):
+        def renderScene(self, s: ImageScene2D, exportFilename=None, joinRendering=True):
             img = QImage(30, 30, QImage.Format_ARGB32_Premultiplied)
             img.fill(Qt.white)
             p = QPainter(img)
@@ -131,18 +131,29 @@ if has_dependencies:
 
         def testLazy(self):
             for i in range(3):
+                print(f"t0 {i=}")
+                # self.op.setDelay(0)
+                # sets the output dirty
                 self.op.setConstant(i)
+                print(f"t1 {i=}")
+                # renderScene waits for all tiles to be finished (finished requesting, too)
                 aimg = self.renderScene(self.scene, "/tmp/a_%03d.png" % i)
+                print(f"t2 {i=}")
                 assert numpy.all(aimg[:, :, 0] == i), "!= %d, [0,0,0]=%d" % (i, aimg[0, 0, 0])
 
-                self.op.setConstant(42)
                 self.op.setDelay(1)
+                print(f"t3 {i=}")
+                self.op.setConstant(42)
+                print(f"t4 {i=} after setting constant/dirty")
+                # tests if tiles are drawn as before, even if they are dirty.
                 aimg = self.renderScene(self.scene, joinRendering=False, exportFilename="/tmp/x_%03d.png" % i)
+                print(f"t5 {i=} after rendering scene not waiting")
                 # this should be "i", not 255 (the default background for the imagescene)
                 assert numpy.all(aimg[:, :, 0] == i), "!= %d, [0,0,0]=%d" % (i, aimg[0, 0, 0])
 
                 # Now give the scene time to update before we change it again...
                 self.scene.joinRenderingAllTiles(viewport_only=False)
+                print(f"t6 {i=} after join render")
 
 
 if __name__ == "__main__":
